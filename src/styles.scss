@@ -1,1 +1,106 @@
-/* You can add global styles to this file, and also import other style files */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600&family=Montserrat:wght@600;700;800&display=swap');
+
+:root {
+  --dwa-bg-void: #000000;
+  --dwa-bg-elevated: #121212;
+  --dwa-bg-muted: #1a1a1a;
+  --dwa-gold-highlight: #f0cc4a;
+  --dwa-gold-primary: #c9a227;
+  --dwa-text-primary: #f5f5f5;
+  --dwa-text-muted: #a3a3a3;
+  --dwa-success: #52e0a0;
+  --dwa-warning: #ffc857;
+  --dwa-danger: #f87171;
+  --dwa-radius-md: 10px;
+  --dwa-radius-lg: 16px;
+  --dwa-font-display: 'Montserrat', system-ui, sans-serif;
+  --dwa-font-body: 'Inter', system-ui, sans-serif;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  font-family: var(--dwa-font-body);
+  background: var(--dwa-bg-void);
+  color: var(--dwa-text-primary);
+  -webkit-font-smoothing: antialiased;
+}
+
+code {
+  font-family: ui-monospace, 'Cascadia Code', monospace;
+  font-size: 0.9em;
+  background: var(--dwa-bg-muted);
+  padding: 0.1em 0.35em;
+  border-radius: 4px;
+}
+
+input[type='text'],
+input[type='password'],
+textarea {
+  width: 100%;
+  padding: 0.625rem 0.75rem;
+  background: var(--dwa-bg-muted);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: var(--dwa-radius-md);
+  color: var(--dwa-text-primary);
+  font: inherit;
+}
+
+textarea {
+  resize: vertical;
+  min-height: 8rem;
+  font-family: ui-monospace, 'Cascadia Code', monospace;
+  font-size: 0.8125rem;
+  line-height: 1.45;
+}
+
+input:focus,
+textarea:focus {
+  outline: 2px solid rgba(201, 162, 39, 0.45);
+  outline-offset: 1px;
+}
+
+.btn-primary {
+  padding: 0.625rem 1rem;
+  border: none;
+  border-radius: var(--dwa-radius-md);
+  background: var(--dwa-gold-primary);
+  color: #000;
+  font-weight: 600;
+  font: inherit;
+  cursor: pointer;
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: var(--dwa-gold-highlight);
+}
+
+.btn-primary:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.btn-ghost {
+  padding: 0.5rem 0.75rem;
+  border: none;
+  border-radius: var(--dwa-radius-md);
+  background: transparent;
+  color: var(--dwa-text-muted);
+  font: inherit;
+  cursor: pointer;
+}
+
+.btn-ghost:hover:not(:disabled) {
+  color: var(--dwa-text-primary);
+  background: var(--dwa-bg-muted);
+}
