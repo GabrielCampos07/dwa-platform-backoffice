@@ -6,8 +6,15 @@ import { RouterLink } from '@angular/router';
   imports: [RouterLink],
   template: `
     <header class="page-header">
-      <h1>Campus notices</h1>
-      <p>Home promos and campus-wide banners for students.</p>
+      <div class="page-header__row">
+        <div>
+          <h1>Campus notices</h1>
+          <p>Home promos and campus-wide banners for students.</p>
+        </div>
+        <button type="button" class="platform-btn-add" disabled aria-label="Novo aviso (indisponível)">
+          <span class="material-symbols-outlined" aria-hidden="true">add</span>
+        </button>
+      </div>
     </header>
 
     <div class="gap-banner">
@@ -41,8 +48,16 @@ import { RouterLink } from '@angular/router';
       font-family: var(--dwa-font-display);
     }
 
+    .page-header__row {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 1rem;
+      margin-bottom: 1.5rem;
+    }
+
     .page-header p {
-      margin: 0 0 1.5rem;
+      margin: 0;
       color: var(--dwa-text-muted);
     }
 

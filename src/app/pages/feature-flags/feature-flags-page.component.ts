@@ -35,14 +35,20 @@ type FlagRow = { key: FeatureFlagKey; enabled: boolean; dirty: boolean };
       <ul class="flag-list">
         @for (row of rows(); track row.key) {
           <li class="flag-row">
-            <label class="flag-row__toggle">
-              <input
-                type="checkbox"
-                [checked]="row.enabled"
-                (change)="toggle(row.key, $any($event.target).checked)"
-              />
+            <div class="flag-row__header">
+              <button
+                type="button"
+                role="switch"
+                class="dwa-switch"
+                [attr.aria-checked]="row.enabled"
+                [attr.aria-label]="labels[row.key] + ': ' + (row.enabled ? 'ligado' : 'desligado')"
+                (click)="toggle(row.key, !row.enabled)"
+              >
+                <span class="dwa-switch__thumb"></span>
+              </button>
               <span class="flag-row__key">{{ row.key }}</span>
-            </label>
+              <span class="flag-row__state">{{ row.enabled ? 'Ligado' : 'Desligado' }}</span>
+            </div>
             <p class="flag-row__desc">{{ labels[row.key] }}</p>
           </li>
         }
@@ -92,21 +98,29 @@ type FlagRow = { key: FeatureFlagKey; enabled: boolean; dirty: boolean };
       border: 1px solid rgba(255, 255, 255, 0.06);
     }
 
-    .flag-row__toggle {
+    .flag-row__header {
       display: flex;
       align-items: center;
       gap: 0.75rem;
-      cursor: pointer;
-      font-weight: 600;
     }
 
     .flag-row__key {
       font-family: ui-monospace, monospace;
+      font-weight: 600;
       color: var(--dwa-gold-highlight);
     }
 
+    .flag-row__state {
+      margin-left: auto;
+      font-size: 0.75rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: var(--dwa-text-muted);
+    }
+
     .flag-row__desc {
-      margin: 0.5rem 0 0 1.75rem;
+      margin: 0.5rem 0 0 3.5rem;
       font-size: 0.8125rem;
       color: var(--dwa-text-muted);
     }

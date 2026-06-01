@@ -24,7 +24,14 @@ import { environment } from '../../environments/environment';
           <a routerLink="/campus-notices" routerLinkActive="active">Campus notices</a>
           <a routerLink="/brand-config" routerLinkActive="active">Brand config</a>
         </nav>
-        <button type="button" class="btn-ghost logout" (click)="logout()">Sair</button>
+        <button
+          type="button"
+          class="btn-icon btn-icon--danger logout"
+          (click)="logout()"
+          aria-label="Sair"
+        >
+          <span class="material-symbols-outlined" aria-hidden="true">logout</span>
+        </button>
       </aside>
       <div class="content">
         <header class="context-bar">

@@ -104,3 +104,125 @@ textarea:focus {
   color: var(--dwa-text-primary);
   background: var(--dwa-bg-muted);
 }
+
+.material-symbols-outlined {
+  font-family: 'Material Symbols Outlined', sans-serif;
+  font-weight: normal;
+  font-style: normal;
+  font-size: 1.25rem;
+  line-height: 1;
+  letter-spacing: normal;
+  text-transform: none;
+  display: inline-block;
+  white-space: nowrap;
+  word-wrap: normal;
+  direction: ltr;
+  font-feature-settings: 'liga';
+  -webkit-font-smoothing: antialiased;
+}
+
+.btn-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  padding: 0;
+  border: none;
+  border-radius: var(--dwa-radius-md);
+  background: transparent;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.btn-icon--danger {
+  color: var(--dwa-danger);
+}
+
+.btn-icon--danger:hover:not(:disabled) {
+  background: rgba(248, 113, 113, 0.12);
+  color: #fca5a5;
+}
+
+.platform-btn-add,
+.dwa-fab-add {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  padding: 0;
+  border: none;
+  border-radius: 999px;
+  background: var(--dwa-gold-primary);
+  color: #000;
+  text-decoration: none;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background 0.15s ease;
+}
+
+.platform-btn-add:hover:not(:disabled),
+.dwa-fab-add:hover:not(:disabled) {
+  background: var(--dwa-gold-highlight);
+}
+
+.platform-btn-add:disabled,
+.dwa-fab-add:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.platform-btn-add .material-symbols-outlined,
+.dwa-fab-add .material-symbols-outlined {
+  font-size: 1.375rem;
+  font-variation-settings: 'FILL' 1;
+}
+
+.dwa-switch {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  width: 2.75rem;
+  height: 1.5rem;
+  padding: 0;
+  border: none;
+  border-radius: 999px;
+  background: rgba(163, 163, 163, 0.35);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background 0.2s ease;
+}
+
+.dwa-switch:hover:not(:disabled) {
+  background: rgba(163, 163, 163, 0.5);
+}
+
+.dwa-switch[aria-checked='true'] {
+  background: var(--dwa-gold-primary);
+}
+
+.dwa-switch[aria-checked='true']:hover:not(:disabled) {
+  background: var(--dwa-gold-highlight);
+}
+
+.dwa-switch:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.dwa-switch__thumb {
+  position: absolute;
+  top: 0.125rem;
+  left: 0.125rem;
+  width: 1.25rem;
+  height: 1.25rem;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+  transition: transform 0.2s ease;
+}
+
+.dwa-switch[aria-checked='true'] .dwa-switch__thumb {
+  transform: translateX(1.25rem);
+}

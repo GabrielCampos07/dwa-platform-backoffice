@@ -16,7 +16,9 @@ import { PlatformContextService } from '../../core/context/platform-context.serv
             <code>{{ context.scopeLabel() }}</code>
           </p>
         </div>
-        <a routerLink="/labels/new" class="btn-primary">Nova label</a>
+        <a routerLink="/labels/new" class="platform-btn-add" aria-label="Nova label">
+          <span class="material-symbols-outlined" aria-hidden="true">add</span>
+        </a>
       </div>
     </header>
 

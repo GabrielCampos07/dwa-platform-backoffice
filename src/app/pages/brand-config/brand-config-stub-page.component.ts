@@ -19,7 +19,9 @@ import { RouterLink } from '@angular/router';
         Use <strong>Exportar bundle</strong> na página de detalhe da label para obter o payload
         completo (<code>GET /internal/v1/labels/:id/export</code>).
       </p>
-      <a routerLink="/labels/new" class="btn-primary">Nova label com brandConfig</a>
+      <a routerLink="/labels/new" class="platform-btn-add" aria-label="Nova label com brandConfig">
+        <span class="material-symbols-outlined" aria-hidden="true">add</span>
+      </a>
     </div>
   `,
   styles: `
@@ -45,7 +47,7 @@ import { RouterLink } from '@angular/router';
       align-items: flex-start;
     }
 
-    a:not(.btn-primary) {
+    a:not(.platform-btn-add) {
       color: var(--dwa-gold-highlight);
     }
   `,
