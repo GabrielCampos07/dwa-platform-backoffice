@@ -1,6 +1,10 @@
 export const SESSION_API_KEY = 'platform-backoffice-internal-api-key';
+export const SESSION_OPERATOR_ID = 'platform-backoffice-operator-id';
 export const SESSION_TENANT_ID = 'platform-backoffice-tenant-id';
 export const SESSION_PRODUCT_ID = 'platform-backoffice-product-id';
+export const SESSION_LABEL_ID = 'platform-backoffice-label-id';
+export const SESSION_LABEL_NAME = 'platform-backoffice-label-name';
+export const SESSION_LABEL_SLUG = 'platform-backoffice-label-slug';
 
 export const FEATURE_FLAG_KEYS = [
   'notifications',

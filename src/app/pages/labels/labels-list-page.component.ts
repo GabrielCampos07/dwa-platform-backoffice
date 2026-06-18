@@ -1,4 +1,5 @@
-import { Component, inject, OnInit, signal } from '@angular/core';
+import { Component, DestroyRef, inject, OnInit, signal } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { RouterLink } from '@angular/router';
 import { LabelRecord, LabelsApiService } from '../../core/api/labels-api.service';
 import { PlatformContextService } from '../../core/context/platform-context.service';
@@ -13,19 +14,19 @@ import { PlatformContextService } from '../../core/context/platform-context.serv
           <h1>Labels</h1>
           <p>
             White-label connections — escopo
-            <code>{{ context.scopeLabel() }}</code>
+            <strong>{{ context.scopeLabel() }}</strong>
           </p>
         </div>
-        <a routerLink="/labels/new" class="platform-btn-add" aria-label="Nova label">
+        <a routerLink="/labels/new" class="create-btn">
           <span class="material-symbols-outlined" aria-hidden="true">add</span>
+          <span>Criar nova label</span>
         </a>
       </div>
     </header>
 
-    @if (!context.hasScope()) {
+    @if (!context.hasValidLabelScope()) {
       <p class="banner banner--warn">
-        Defina <strong>tenantId</strong> e <strong>productId</strong> na barra de contexto acima para
-        filtrar a lista.
+        Selecione uma <strong>conta</strong> no topo da página para filtrar labels do escopo.
       </p>
     }
 
@@ -39,37 +40,71 @@ import { PlatformContextService } from '../../core/context/platform-context.serv
         <a routerLink="/labels/new" class="link">Criar primeira label →</a>
       </div>
     } @else {
-      <div class="table-wrap">
-        <table class="data-table">
-          <thead>
-            <tr>
-              <th>Slug</th>
-              <th>Nome</th>
-              <th>Ativa</th>
-              <th>Escopo</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody>
-            @for (label of labels(); track label.id) {
+      <div class="table-card">
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead>
               <tr>
-                <td><code>{{ label.slug }}</code></td>
-                <td>{{ label.name }}</td>
-                <td>
-                  <span class="badge" [class.badge--on]="label.isActive" [class.badge--off]="!label.isActive">
-                    {{ label.isActive ? 'Sim' : 'Não' }}
-                  </span>
-                </td>
-                <td class="muted">
-                  <code>{{ label.tenantId }}/{{ label.productId }}</code>
-                </td>
-                <td class="actions">
-                  <a [routerLink]="['/labels', label.id]">Editar</a>
-                </td>
+                <th>Nome da label</th>
+                <th>Status</th>
+                <th>Cor primária</th>
+                <th>Escopo</th>
+                <th class="th-actions">Ações</th>
               </tr>
-            }
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              @for (label of labels(); track label.id) {
+                <tr>
+                  <td>
+                    <div class="name-cell">
+                      <span
+                        class="name-cell__bar"
+                        [style.background]="primaryColor(label) ?? 'var(--dwa-gold-primary)'"
+                      ></span>
+                      <span class="name-cell__text">
+                        <span class="name-cell__name">{{ label.name }}</span>
+                        <span class="name-cell__slug"><code>{{ label.slug }}</code></span>
+                      </span>
+                    </div>
+                  </td>
+                  <td>
+                    <span
+                      class="badge"
+                      [class.badge--on]="label.isActive"
+                      [class.badge--off]="!label.isActive"
+                    >
+                      {{ label.isActive ? 'Ativa' : 'Inativa' }}
+                    </span>
+                  </td>
+                  <td>
+                    @if (primaryColor(label); as color) {
+                      <span class="color-cell">
+                        <span class="color-cell__swatch" [style.background]="color"></span>
+                        <code>{{ color }}</code>
+                      </span>
+                    } @else {
+                      <span class="muted">—</span>
+                    }
+                  </td>
+                  <td class="muted">
+                    <code>{{ label.tenantId }}/{{ label.productId }}</code>
+                  </td>
+                  <td>
+                    <div class="row-actions">
+                      <a
+                        class="row-action"
+                        [routerLink]="['/labels', label.id]"
+                        [attr.aria-label]="'Editar ' + label.name"
+                      >
+                        <span class="material-symbols-outlined" aria-hidden="true">edit</span>
+                      </a>
+                    </div>
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
       </div>
     }
   `,
@@ -93,10 +128,42 @@ import { PlatformContextService } from '../../core/context/platform-context.serv
       font-size: 0.875rem;
     }
 
+    .create-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.625rem 1.25rem;
+      border-radius: var(--dwa-radius-md);
+      background: var(--dwa-gold-primary);
+      color: #000;
+      text-decoration: none;
+      font-size: 0.75rem;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      box-shadow: 0 0 15px rgba(201, 162, 39, 0.2);
+      transition: background 0.15s ease;
+      white-space: nowrap;
+    }
+
+    .create-btn:hover {
+      background: var(--dwa-gold-highlight);
+    }
+
+    .create-btn .material-symbols-outlined {
+      font-size: 1.125rem;
+    }
+
+    .table-card {
+      background: var(--dwa-bg-elevated);
+      border: 1px solid #333;
+      border-radius: var(--dwa-radius-lg);
+      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+      overflow: hidden;
+    }
+
     .table-wrap {
       overflow-x: auto;
-      border-radius: var(--dwa-radius-lg);
-      border: 1px solid rgba(255, 255, 255, 0.06);
     }
 
     .data-table {
@@ -107,18 +174,22 @@ import { PlatformContextService } from '../../core/context/platform-context.serv
 
     .data-table th,
     .data-table td {
-      padding: 0.75rem 1rem;
+      padding: 1rem 1.5rem;
       text-align: left;
-      border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+      border-bottom: 1px solid #333;
     }
 
     .data-table th {
-      background: var(--dwa-bg-muted);
+      background: rgba(26, 26, 26, 0.5);
       color: var(--dwa-text-muted);
-      font-weight: 600;
-      font-size: 0.75rem;
+      font-weight: 700;
+      font-size: 0.625rem;
       text-transform: uppercase;
-      letter-spacing: 0.04em;
+      letter-spacing: 0.1em;
+    }
+
+    .th-actions {
+      text-align: right;
     }
 
     .data-table tbody tr:hover {
@@ -129,28 +200,100 @@ import { PlatformContextService } from '../../core/context/platform-context.serv
       border-bottom: none;
     }
 
+    .name-cell {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+
+    .name-cell__bar {
+      width: 4px;
+      align-self: stretch;
+      min-height: 2rem;
+      border-radius: 999px;
+      flex-shrink: 0;
+    }
+
+    .name-cell__text {
+      display: flex;
+      flex-direction: column;
+      gap: 0.125rem;
+    }
+
+    .name-cell__name {
+      font-weight: 700;
+      color: var(--dwa-text-primary);
+    }
+
+    .name-cell__slug code {
+      font-size: 0.6875rem;
+    }
+
+    .color-cell {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .color-cell__swatch {
+      width: 16px;
+      height: 16px;
+      border-radius: 3px;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      flex-shrink: 0;
+    }
+
     .badge {
       display: inline-block;
-      padding: 0.125rem 0.5rem;
-      border-radius: 999px;
-      font-size: 0.75rem;
-      font-weight: 600;
+      padding: 0.25rem 0.625rem;
+      border-radius: 6px;
+      font-size: 0.625rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
     }
 
     .badge--on {
-      background: rgba(82, 224, 160, 0.15);
+      background: rgba(82, 224, 160, 0.1);
+      border: 1px solid rgba(82, 224, 160, 0.2);
       color: var(--dwa-success);
     }
 
     .badge--off {
-      background: rgba(163, 163, 163, 0.15);
+      background: rgba(163, 163, 163, 0.1);
+      border: 1px solid rgba(163, 163, 163, 0.2);
       color: var(--dwa-text-muted);
     }
 
-    .actions a {
-      color: var(--dwa-gold-highlight);
+    .row-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 0.5rem;
+    }
+
+    .row-action {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 32px;
+      height: 32px;
+      border: 1px solid #333;
+      border-radius: var(--dwa-radius-md);
+      background: var(--dwa-bg-void);
+      color: var(--dwa-text-muted);
       text-decoration: none;
-      font-weight: 600;
+      transition:
+        color 0.15s ease,
+        border-color 0.15s ease;
+    }
+
+    .row-action:hover {
+      color: var(--dwa-gold-highlight);
+      border-color: rgba(201, 162, 39, 0.4);
+    }
+
+    .row-action .material-symbols-outlined {
+      font-size: 1rem;
     }
 
     .muted {
@@ -189,6 +332,7 @@ import { PlatformContextService } from '../../core/context/platform-context.serv
 })
 export class LabelsListPageComponent implements OnInit {
   private readonly api = inject(LabelsApiService);
+  private readonly destroyRef = inject(DestroyRef);
   readonly context = inject(PlatformContextService);
 
   readonly loading = signal(true);
@@ -197,13 +341,33 @@ export class LabelsListPageComponent implements OnInit {
 
   ngOnInit(): void {
     this.reload();
+    this.context.scopeChanged$.pipe(takeUntilDestroyed(this.destroyRef)).subscribe(() => this.reload());
+  }
+
+  /** Best-effort extraction of a hex primary color from a label's brandConfig. */
+  primaryColor(label: LabelRecord): string | null {
+    const cfg = label.brandConfig as Record<string, any> | null | undefined;
+    const candidate =
+      cfg?.['theme']?.['primary'] ??
+      cfg?.['theme']?.['colors']?.['primary'] ??
+      cfg?.['colors']?.['primary'] ??
+      cfg?.['primaryColor'] ??
+      cfg?.['primary'];
+    if (typeof candidate !== 'string') {
+      return null;
+    }
+    const value = candidate.trim();
+    if (!/^#?[0-9a-fA-F]{3}(?:[0-9a-fA-F]{3}(?:[0-9a-fA-F]{2})?)?$/.test(value)) {
+      return null;
+    }
+    return value.startsWith('#') ? value.toUpperCase() : `#${value.toUpperCase()}`;
   }
 
   reload(): void {
     this.loading.set(true);
     this.loadError.set('');
 
-    const filters = this.context.hasScope()
+    const filters = this.context.hasValidLabelScope()
       ? { tenantId: this.context.tenantId(), productId: this.context.productId() }
       : undefined;
 

@@ -1,192 +1,365 @@
-import { Component, inject, OnInit, signal } from '@angular/core';
+import { DecimalPipe } from '@angular/common';
+import { Component, DestroyRef, inject, OnInit, signal } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { RouterLink } from '@angular/router';
-import { FeatureFlagsApiService } from '../../core/api/feature-flags-api.service';
-import { HealthApiService } from '../../core/api/health-api.service';
-import { PlatformContextService } from '../../core/context/platform-context.service';
+import {
+  AnalyticsApiService,
+  AnalyticsOverview,
+} from '../../core/api/analytics-api.service';
+import { friendlyPlatformApiError } from '../../core/api/api-error.util';
+import {
+  FALLBACK_PRODUCTS,
+  ProductRecord,
+  ProductsApiService,
+} from '../../core/api/products-api.service';
+import { RealtimeService } from '../../core/realtime/realtime.service';
+import { PageHeaderComponent } from '../../shared/components/page-header/page-header.component';
+
+type MetricCard = {
+  key: string;
+  label: string;
+  value: number;
+  link?: string;
+};
 
 @Component({
   selector: 'app-dashboard-page',
-  imports: [RouterLink],
+  imports: [RouterLink, DecimalPipe, PageHeaderComponent],
   template: `
-    <header class="page-header">
-      <h1>Dashboard</h1>
-      <p>Conexão com a API e escopo da plataforma selecionado.</p>
-    </header>
+    <app-page-header
+      title="Dashboard"
+      description="Métricas agregadas da plataforma — atualização em tempo real quando disponível."
+    >
+      <div actions class="live-status">
+        <span
+          class="live-dot"
+          [class.live-dot--on]="realtime.connected()"
+          aria-hidden="true"
+        ></span>
+        <span class="live-label">
+          @if (realtime.connected()) {
+            Tempo real ativo
+          } @else {
+            Tempo real indisponível
+          }
+        </span>
+      </div>
+    </app-page-header>
 
-    <section class="card-grid">
-      <article class="card" [class.card--ok]="apiStatus() === 'ok'" [class.card--err]="apiStatus() === 'error'">
-        <h2>API health</h2>
-        @if (apiStatus() === 'loading') {
-          <p>Verificando <code>/health</code>…</p>
-        } @else if (apiStatus() === 'ok' && health()) {
-          <p class="status-ok">Conectado</p>
-          <dl>
-            <dt>Versão</dt>
-            <dd>{{ health()!.version }}</dd>
-            <dt>Timestamp</dt>
-            <dd>{{ health()!.timestamp }}</dd>
-          </dl>
-        } @else {
-          <p class="status-err">{{ apiError() }}</p>
-          <p class="muted">Inicie a API na porta <code>3000</code> (proxy dev encaminha automaticamente).</p>
+    @if (realtime.lastToast(); as toast) {
+      <div class="toast" role="status">
+        <span>{{ toast }}</span>
+        <button type="button" class="toast__dismiss" (click)="realtime.dismissToast()">Fechar</button>
+      </div>
+    }
+
+    @if (status() === 'loading') {
+      <p class="muted">Carregando métricas da plataforma…</p>
+    } @else if (status() === 'error') {
+      <p class="banner banner--error">{{ loadError() }}</p>
+      <p class="muted">
+        Inicie a <strong>platform-api</strong> na porta <code>3010</code> ou aguarde o deploy do
+        endpoint <code>/platform/v1/analytics/overview</code>.
+      </p>
+    } @else if (overview(); as data) {
+      <section class="metric-grid" aria-label="Métricas da plataforma">
+        @for (card of metricCards(data); track card.key) {
+          @if (card.link) {
+            <a class="metric-card metric-card--link" [routerLink]="card.link">
+              <span class="metric-card__label">{{ card.label }}</span>
+              <span class="metric-card__value">{{ card.value | number }}</span>
+            </a>
+          } @else {
+            <article class="metric-card">
+              <span class="metric-card__label">{{ card.label }}</span>
+              <span class="metric-card__value">{{ card.value | number }}</span>
+            </article>
+          }
         }
-      </article>
+      </section>
 
-      <article class="card" [class.card--ok]="flagsStatus() === 'ok'" [class.card--err]="flagsStatus() === 'error'">
-        <h2>Internal API</h2>
-        @if (!context.hasScope()) {
-          <p class="status-warn">Defina tenant e product na barra de contexto.</p>
-        } @else if (flagsStatus() === 'loading') {
-          <p>Verificando feature flags…</p>
-        } @else if (flagsStatus() === 'ok') {
-          <p class="status-ok">Autenticado</p>
-          <p>{{ flagCount() }} flag(s) para <code>{{ context.scopeLabel() }}</code></p>
-          <a routerLink="/feature-flags" class="link">Gerenciar flags →</a>
-        } @else {
-          <p class="status-err">{{ flagsError() }}</p>
-          <p class="muted">
-            Confira se <code>INTERNAL_API_KEY</code> na API corresponde à chave informada no login.
-          </p>
-        }
-      </article>
-
-      <article class="card">
-        <h2>Escopo selecionado</h2>
-        <dl>
-          <dt>Tenant</dt>
-          <dd><code>{{ context.tenantId() || '—' }}</code></dd>
-          <dt>Product</dt>
-          <dd><code>{{ context.productId() || '—' }}</code></dd>
-        </dl>
-        <a routerLink="/labels" class="link">Gerenciar labels →</a>
-      </article>
-    </section>
+      @if (data.byProduct.length) {
+        <section class="breakdown">
+          <h2>Por produto</h2>
+          <div class="breakdown-grid">
+            @for (row of data.byProduct; track row.productId) {
+              <article class="breakdown-card">
+                <h3>{{ productLabel(row.productId) }}</h3>
+                <dl>
+                  <div>
+                    <dt>Contas</dt>
+                    <dd>{{ row.totalAccounts | number }}</dd>
+                  </div>
+                  <div>
+                    <dt>Ativas</dt>
+                    <dd>{{ row.activeAccounts | number }}</dd>
+                  </div>
+                  <div>
+                    <dt>Usuários</dt>
+                    <dd>{{ row.totalUsers | number }}</dd>
+                  </div>
+                  <div>
+                    <dt>Check-ins 7d</dt>
+                    <dd>{{ row.checkIns7d | number }}</dd>
+                  </div>
+                  <div>
+                    <dt>Posts feed 7d</dt>
+                    <dd>{{ row.feedPosts7d | number }}</dd>
+                  </div>
+                </dl>
+              </article>
+            }
+          </div>
+        </section>
+      }
+    }
   `,
   styles: `
-    .page-header h1 {
-      margin: 0 0 0.25rem;
-      font-family: var(--dwa-font-display);
-      font-size: 1.75rem;
-    }
-
-    .page-header p {
-      margin: 0 0 2rem;
+    .live-status {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-size: 0.75rem;
       color: var(--dwa-text-muted);
+      white-space: nowrap;
     }
 
-    .card-grid {
+    .live-dot {
+      width: 0.5rem;
+      height: 0.5rem;
+      border-radius: 50%;
+      background: var(--dwa-text-muted);
+    }
+
+    .live-dot--on {
+      background: var(--dwa-success);
+      box-shadow: 0 0 0 3px rgba(82, 224, 160, 0.2);
+    }
+
+    .toast {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+      margin-bottom: 1.25rem;
+      padding: 0.75rem 1rem;
+      background: rgba(201, 162, 39, 0.12);
+      border: 1px solid rgba(201, 162, 39, 0.25);
+      border-radius: var(--dwa-radius-md);
+      font-size: 0.875rem;
+      color: var(--dwa-gold-highlight);
+    }
+
+    .toast__dismiss {
+      border: none;
+      background: transparent;
+      color: inherit;
+      font: inherit;
+      font-size: 0.75rem;
+      font-weight: 600;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+
+    .metric-grid {
       display: grid;
       gap: 1rem;
-      grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+      grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+      margin-bottom: 2rem;
     }
 
-    .card {
+    .metric-card {
+      display: flex;
+      flex-direction: column;
+      gap: 0.375rem;
       padding: 1.25rem;
       background: var(--dwa-bg-elevated);
       border: 1px solid rgba(255, 255, 255, 0.06);
       border-radius: var(--dwa-radius-lg);
+      text-decoration: none;
+      color: inherit;
     }
 
-    .card--ok {
-      border-color: rgba(82, 224, 160, 0.35);
+    .metric-card--link:hover {
+      border-color: rgba(201, 162, 39, 0.35);
     }
 
-    .card--err {
-      border-color: rgba(248, 113, 113, 0.35);
+    .metric-card__label {
+      font-size: 0.6875rem;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--dwa-text-muted);
     }
 
-    .card h2 {
-      margin: 0 0 0.75rem;
+    .metric-card__value {
+      font-family: var(--dwa-font-display);
+      font-size: 1.75rem;
+      font-weight: 700;
+      line-height: 1.1;
+    }
+
+    .breakdown h2 {
+      margin: 0 0 1rem;
+      font-size: 0.75rem;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--dwa-text-muted);
+    }
+
+    .breakdown-grid {
+      display: grid;
+      gap: 1rem;
+      grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    }
+
+    .breakdown-card {
+      padding: 1.25rem;
+      background: var(--dwa-bg-elevated);
+      border: 1px solid #333;
+      border-radius: var(--dwa-radius-lg);
+    }
+
+    .breakdown-card h3 {
+      margin: 0 0 1rem;
       font-size: 1rem;
     }
 
-    dl {
-      margin: 0.75rem 0 0;
+    .breakdown-card dl {
       display: grid;
-      grid-template-columns: auto 1fr;
-      gap: 0.25rem 1rem;
-      font-size: 0.875rem;
-    }
-
-    dt {
-      color: var(--dwa-text-muted);
-    }
-
-    dd {
+      gap: 0.625rem;
       margin: 0;
     }
 
-    .status-ok {
-      color: var(--dwa-success);
-      font-weight: 600;
+    .breakdown-card dt {
+      font-size: 0.625rem;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--dwa-text-muted);
     }
 
-    .status-err {
-      color: var(--dwa-danger);
-    }
-
-    .status-warn {
-      color: var(--dwa-warning);
-      font-weight: 600;
+    .breakdown-card dd {
+      margin: 0.125rem 0 0;
+      font-size: 1.125rem;
+      font-weight: 700;
     }
 
     .muted {
-      font-size: 0.8125rem;
       color: var(--dwa-text-muted);
-      line-height: 1.45;
+      font-size: 0.875rem;
     }
 
-    .link {
-      display: inline-block;
-      margin-top: 0.75rem;
-      color: var(--dwa-gold-highlight);
+    .banner {
+      padding: 0.75rem 1rem;
+      border-radius: var(--dwa-radius-md);
       font-size: 0.875rem;
+      margin: 0 0 0.75rem;
+    }
+
+    .banner--error {
+      background: rgba(248, 113, 113, 0.12);
+      color: var(--dwa-danger);
     }
   `,
 })
 export class DashboardPageComponent implements OnInit {
-  private readonly healthApi = inject(HealthApiService);
-  private readonly flagsApi = inject(FeatureFlagsApiService);
-  readonly context = inject(PlatformContextService);
+  private readonly analyticsApi = inject(AnalyticsApiService);
+  private readonly productsApi = inject(ProductsApiService);
+  private readonly destroyRef = inject(DestroyRef);
+  readonly realtime = inject(RealtimeService);
 
-  readonly apiStatus = signal<'loading' | 'ok' | 'error'>('loading');
-  readonly flagsStatus = signal<'loading' | 'ok' | 'error' | 'skipped'>('loading');
-  readonly health = signal<{ version: string; timestamp: string } | null>(null);
-  readonly apiError = signal('Não foi possível alcançar a API.');
-  readonly flagsError = signal('Verificação da internal API falhou.');
-  readonly flagCount = signal(0);
+  readonly status = signal<'loading' | 'ok' | 'error'>('loading');
+  readonly loadError = signal('');
+  readonly overview = signal<AnalyticsOverview | null>(null);
+  readonly products = signal<ProductRecord[]>(FALLBACK_PRODUCTS);
 
   ngOnInit(): void {
-    this.healthApi.check().subscribe({
-      next: (res) => {
-        this.health.set({ version: res.version, timestamp: res.timestamp });
-        this.apiStatus.set('ok');
+    this.loadProducts();
+    this.reloadOverview();
+    this.realtime.connect();
+    this.realtime.events$.pipe(takeUntilDestroyed(this.destroyRef)).subscribe((event) => {
+      if (event.type === 'stats_updated') {
+        this.reloadOverview(true);
+      }
+    });
+  }
+
+  metricCards(data: AnalyticsOverview): MetricCard[] {
+    return [
+      {
+        key: 'activeAccounts',
+        label: 'Contas ativas',
+        value: data.activeAccounts,
+        link: '/accounts',
       },
-      error: (err) => {
-        this.apiError.set(err?.error?.message ?? 'API inacessível. Está rodando na porta 3000?');
-        this.apiStatus.set('error');
+      { key: 'totalUsers', label: 'Usuários', value: data.totalUsers, link: '/accounts' },
+      { key: 'checkIns7d', label: 'Check-ins 7d', value: data.checkIns7d },
+      {
+        key: 'feedPosts7d',
+        label: 'Posts feed 7d',
+        value: data.feedPosts7d,
+        link: '/feed-moderation',
+      },
+      {
+        key: 'pendingIdentityReviews',
+        label: 'Revisões pendentes',
+        value: data.pendingIdentityReviews,
+        link: '/identity-review',
+      },
+      {
+        key: 'pendingDeletionRequests',
+        label: 'Pedidos LGPD pendentes',
+        value: data.pendingDeletionRequests ?? 0,
+        link: '/privacy/deletion-requests',
+      },
+      {
+        key: 'liveDeveloperAnnouncements',
+        label: 'Avisos dev ativos',
+        value: data.liveDeveloperAnnouncements,
+        link: '/developer-announcements',
+      },
+    ];
+  }
+
+  productLabel(productId: string): string {
+    const match = this.products().find((p) => p.id === productId);
+    return match?.name ?? productId;
+  }
+
+  private loadProducts(): void {
+    this.productsApi.list().subscribe({
+      next: (res) => {
+        if (res.products?.length) {
+          this.products.set(res.products);
+        }
+      },
+      error: () => {
+        this.products.set(FALLBACK_PRODUCTS);
       },
     });
+  }
 
-    if (!this.context.hasScope()) {
-      this.flagsStatus.set('skipped');
-      return;
+  private reloadOverview(silent = false): void {
+    if (!silent) {
+      this.status.set('loading');
+      this.loadError.set('');
     }
 
-    this.flagsApi.list().subscribe({
+    this.analyticsApi.overview().subscribe({
       next: (res) => {
-        this.flagCount.set(res.flags.length);
-        this.flagsStatus.set('ok');
+        this.overview.set(res.overview);
+        this.status.set('ok');
       },
       error: (err) => {
-        const msg =
-          err?.status === 401
-            ? 'Chave de API interna inválida.'
-            : err?.status === 503
-              ? 'Internal API não configurada no servidor (INTERNAL_API_KEY ausente).'
-              : (err?.error?.message ?? 'Endpoint de feature flags falhou.');
-        this.flagsError.set(msg);
-        this.flagsStatus.set('error');
+        if (!silent) {
+          this.overview.set(null);
+          this.loadError.set(
+            friendlyPlatformApiError(err, 'Não foi possível carregar o resumo analítico.'),
+          );
+          this.status.set('error');
+        }
       },
     });
   }

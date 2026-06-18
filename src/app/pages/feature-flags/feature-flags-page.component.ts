@@ -1,14 +1,14 @@
-import { Component, inject, OnInit, signal } from '@angular/core';
+import { Component, DestroyRef, inject, OnInit, signal } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
 import {
-  FEATURE_FLAG_KEYS,
-  FEATURE_FLAG_LABELS,
-  type FeatureFlagKey,
-} from '../../core/constants';
-import { FeatureFlagsApiService } from '../../core/api/feature-flags-api.service';
+  FeatureFlagsApiService,
+  labelForFlagKey,
+} from '../../core/api/feature-flags-api.service';
 import { PlatformContextService } from '../../core/context/platform-context.service';
+import { RealtimeService } from '../../core/realtime/realtime.service';
 
-type FlagRow = { key: FeatureFlagKey; enabled: boolean; dirty: boolean };
+type FlagRow = { key: string; enabled: boolean; dirty: boolean };
 
 @Component({
   selector: 'app-feature-flags-page',
@@ -16,40 +16,46 @@ type FlagRow = { key: FeatureFlagKey; enabled: boolean; dirty: boolean };
   template: `
     <header class="page-header">
       <h1>Feature flags</h1>
-      <p>
-        Escopo <code>{{ context.scopeLabel() }}</code> — internal
-        <code>GET/PUT /internal/v1/tenants/…/products/…/feature-flags</code>
-      </p>
+      @if (context.hasValidLabelScope()) {
+        <p>
+          Funcionalidades da conta <strong>{{ context.labelName() }}</strong>
+          <span class="product-tag">{{ context.productId() }}</span>
+        </p>
+      } @else {
+        <p>Selecione uma conta no topo da página para gerenciar as funcionalidades do produto.</p>
+      }
+      @if (keysFallback()) {
+        <p class="keys-hint">Catálogo de flags indisponível na API — usando lista padrão.</p>
+      }
     </header>
 
-    @if (!context.hasScope()) {
+    @if (!context.hasValidLabelScope()) {
       <p class="banner banner--warn">
-        Defina <strong>tenantId</strong> e <strong>productId</strong> na barra de contexto para carregar
-        flags.
+        Escolha uma <strong>conta</strong> no seletor de escopo (canto superior) e clique em
+        <strong>Aplicar escopo</strong> para carregar as flags.
       </p>
     } @else if (loadError()) {
       <p class="banner banner--error">{{ loadError() }}</p>
     } @else if (loading()) {
       <p>Carregando flags…</p>
     } @else {
-      <ul class="flag-list">
+      <ul class="flag-grid">
         @for (row of rows(); track row.key) {
-          <li class="flag-row">
-            <div class="flag-row__header">
-              <button
-                type="button"
-                role="switch"
-                class="dwa-switch"
-                [attr.aria-checked]="row.enabled"
-                [attr.aria-label]="labels[row.key] + ': ' + (row.enabled ? 'ligado' : 'desligado')"
-                (click)="toggle(row.key, !row.enabled)"
-              >
-                <span class="dwa-switch__thumb"></span>
-              </button>
-              <span class="flag-row__key">{{ row.key }}</span>
-              <span class="flag-row__state">{{ row.enabled ? 'Ligado' : 'Desligado' }}</span>
+          <li class="flag-card">
+            <div class="flag-card__text">
+              <h3 class="flag-card__title">{{ labelFor(row.key) }}</h3>
+              <p class="flag-card__desc"><code>{{ row.key }}</code></p>
             </div>
-            <p class="flag-row__desc">{{ labels[row.key] }}</p>
+            <button
+              type="button"
+              role="switch"
+              class="dwa-switch"
+              [attr.aria-checked]="row.enabled"
+              [attr.aria-label]="labelFor(row.key) + ': ' + (row.enabled ? 'ligado' : 'desligado')"
+              (click)="toggle(row.key, !row.enabled)"
+            >
+              <span class="dwa-switch__thumb"></span>
+            </button>
           </li>
         }
       </ul>
@@ -77,51 +83,66 @@ type FlagRow = { key: FeatureFlagKey; enabled: boolean; dirty: boolean };
     }
 
     .page-header p {
-      margin: 0 0 1.5rem;
+      margin: 0 0 0.5rem;
       color: var(--dwa-text-muted);
       font-size: 0.875rem;
     }
 
-    .flag-list {
-      list-style: none;
-      margin: 0;
-      padding: 0;
-      display: flex;
-      flex-direction: column;
-      gap: 0.75rem;
-    }
-
-    .flag-row {
-      padding: 1rem 1.25rem;
-      background: var(--dwa-bg-elevated);
-      border-radius: var(--dwa-radius-lg);
-      border: 1px solid rgba(255, 255, 255, 0.06);
-    }
-
-    .flag-row__header {
-      display: flex;
-      align-items: center;
-      gap: 0.75rem;
-    }
-
-    .flag-row__key {
-      font-family: ui-monospace, monospace;
-      font-weight: 600;
+    .product-tag {
+      display: inline-block;
+      margin-left: 0.5rem;
+      padding: 0.125rem 0.5rem;
+      font-size: 0.6875rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      background: rgba(201, 162, 39, 0.15);
+      border: 1px solid rgba(201, 162, 39, 0.25);
+      border-radius: 999px;
       color: var(--dwa-gold-highlight);
     }
 
-    .flag-row__state {
-      margin-left: auto;
+    .keys-hint {
+      margin: 0 0 1rem;
       font-size: 0.75rem;
-      font-weight: 600;
-      text-transform: uppercase;
-      letter-spacing: 0.04em;
-      color: var(--dwa-text-muted);
+      color: var(--dwa-warning);
     }
 
-    .flag-row__desc {
-      margin: 0.5rem 0 0 3.5rem;
-      font-size: 0.8125rem;
+    .flag-grid {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+      gap: 1.5rem;
+    }
+
+    .flag-card {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 1rem;
+      padding: 1.25rem;
+      background: var(--dwa-bg-elevated);
+      border: 1px solid #333;
+      border-radius: var(--dwa-radius-lg);
+    }
+
+    .flag-card__text {
+      min-width: 0;
+    }
+
+    .flag-card__title {
+      margin: 0;
+      font-size: 1rem;
+      font-weight: 700;
+      color: var(--dwa-text-primary);
+    }
+
+    .flag-card__desc {
+      margin: 0.25rem 0 0;
+      font-size: 0.75rem;
+      line-height: 1.5;
       color: var(--dwa-text-muted);
     }
 
@@ -156,9 +177,13 @@ type FlagRow = { key: FeatureFlagKey; enabled: boolean; dirty: boolean };
 })
 export class FeatureFlagsPageComponent implements OnInit {
   private readonly api = inject(FeatureFlagsApiService);
+  private readonly destroyRef = inject(DestroyRef);
+  private readonly realtime = inject(RealtimeService);
   readonly context = inject(PlatformContextService);
 
-  readonly labels = FEATURE_FLAG_LABELS;
+  private flagLabelMap = new Map<string, string>();
+
+  readonly labelFor = (key: string) => labelForFlagKey(key, this.flagLabelMap);
 
   readonly loading = signal(true);
   readonly saving = signal(false);
@@ -166,17 +191,25 @@ export class FeatureFlagsPageComponent implements OnInit {
   readonly saveMessage = signal('');
   readonly saveOk = signal(false);
   readonly rows = signal<FlagRow[]>([]);
-  private serverSnapshot = new Map<FeatureFlagKey, boolean>();
+  readonly keysFallback = signal(false);
+  private flagKeys: string[] = [];
+  private serverSnapshot = new Map<string, boolean>();
 
   ngOnInit(): void {
     this.reload();
+    this.context.scopeChanged$.pipe(takeUntilDestroyed(this.destroyRef)).subscribe(() => this.reload());
+    this.realtime.events$.pipe(takeUntilDestroyed(this.destroyRef)).subscribe((event) => {
+      if (event.type === 'flags_updated') {
+        this.reload();
+      }
+    });
   }
 
   hasDirty(): boolean {
     return this.rows().some((r) => r.dirty);
   }
 
-  toggle(key: FeatureFlagKey, enabled: boolean): void {
+  toggle(key: string, enabled: boolean): void {
     this.rows.update((list) =>
       list.map((r) =>
         r.key === key
@@ -188,7 +221,7 @@ export class FeatureFlagsPageComponent implements OnInit {
   }
 
   reload(): void {
-    if (!this.context.hasScope()) {
+    if (!this.context.hasValidLabelScope()) {
       this.loading.set(false);
       this.loadError.set('');
       this.rows.set([]);
@@ -197,24 +230,18 @@ export class FeatureFlagsPageComponent implements OnInit {
 
     this.loading.set(true);
     this.loadError.set('');
-    this.api.list().subscribe({
-      next: (res) => {
-        const byKey = new Map(res.flags.map((f) => [f.key as FeatureFlagKey, f.enabled]));
-        this.serverSnapshot = new Map(
-          FEATURE_FLAG_KEYS.map((k) => [k, byKey.get(k) ?? false]),
-        );
-        this.rows.set(
-          FEATURE_FLAG_KEYS.map((key) => ({
-            key,
-            enabled: this.serverSnapshot.get(key) ?? false,
-            dirty: false,
-          })),
-        );
-        this.loading.set(false);
+    this.keysFallback.set(false);
+
+    this.api.resolveFlagKeys().subscribe({
+      next: ({ keys, definitions, source }) => {
+        this.flagKeys = keys;
+        this.flagLabelMap = new Map(definitions.map((d) => [d.key, d.label]));
+        this.keysFallback.set(source === 'constants');
+        this.loadFlags();
       },
-      error: (err) => {
-        this.loadError.set(err?.error?.message ?? 'Falha ao carregar feature flags.');
-        this.loading.set(false);
+      error: () => {
+        this.keysFallback.set(true);
+        this.loadFlags();
       },
     });
   }
@@ -231,16 +258,7 @@ export class FeatureFlagsPageComponent implements OnInit {
       .upsert(dirty.map((r) => ({ key: r.key, enabled: r.enabled, metadata: null })))
       .subscribe({
         next: (res) => {
-          this.serverSnapshot = new Map(
-            res.flags.map((f) => [f.key as FeatureFlagKey, f.enabled]),
-          );
-          this.rows.set(
-            FEATURE_FLAG_KEYS.map((key) => ({
-              key,
-              enabled: this.serverSnapshot.get(key) ?? false,
-              dirty: false,
-            })),
-          );
+          this.applyFlags(res.flags);
           this.saveOk.set(true);
           this.saveMessage.set('Flags salvas. Apps conectados recebem updates via WebSocket.');
           this.saving.set(false);
@@ -251,5 +269,30 @@ export class FeatureFlagsPageComponent implements OnInit {
           this.saving.set(false);
         },
       });
+  }
+
+  private loadFlags(): void {
+    this.api.list().subscribe({
+      next: (res) => {
+        this.applyFlags(res.flags);
+        this.loading.set(false);
+      },
+      error: (err) => {
+        this.loadError.set(err?.error?.message ?? 'Falha ao carregar feature flags.');
+        this.loading.set(false);
+      },
+    });
+  }
+
+  private applyFlags(flags: { key: string; enabled: boolean }[]): void {
+    const byKey = new Map(flags.map((f) => [f.key, f.enabled]));
+    this.serverSnapshot = new Map(this.flagKeys.map((k) => [k, byKey.get(k) ?? false]));
+    this.rows.set(
+      this.flagKeys.map((key) => ({
+        key,
+        enabled: this.serverSnapshot.get(key) ?? false,
+        dirty: false,
+      })),
+    );
   }
 }
